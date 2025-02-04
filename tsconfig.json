@@ -10,5 +10,5 @@
     "outDir": "./build",
     "sourceMap": true
   },
-  "exclude": ["node_modules", "tests", "tests/utils", "build"]
+  "exclude": ["node_modules", "tests", "tests/utils", "build", "utils"]
 }
