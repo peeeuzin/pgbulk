@@ -1,4 +1,3 @@
-import { glob } from "glob";
 import { ConnectionConfig, Pool, PoolClient, PoolConfig } from "pg";
 import fs from "fs";
 import path from "path";
@@ -7,7 +6,9 @@ import { stringify } from "csv";
 import { from as copyFrom } from "pg-copy-streams";
 import { format } from "util";
 import { pipeline } from "node:stream/promises";
-import internal, { PassThrough, Transform, TransformCallback } from "stream";
+import { Transform } from "stream";
+import { ColumnParserTransformer } from "./columnParserTransformer";
+import { globSync } from "glob";
 
 type Index = {
   name: string;
@@ -23,11 +24,6 @@ type Constraint = {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Row = { [column: string]: any };
-
-export type CallbackOptions = {
-  transformer?: internal.Transform;
-  finish?: (client: PoolClient) => void;
-};
 
 export type PopulateConfig = {
   strategy?: "csv";
@@ -50,11 +46,11 @@ export type PopulateConfig = {
   };
 };
 
-export class Populate {
+export abstract class Populate {
   readonly config: PopulateConfig;
 
-  private pool?: Pool;
-  private temporaryTableName;
+  protected pool?: Pool;
+  protected temporaryTableName;
 
   files: string[] = [];
 
@@ -71,8 +67,8 @@ export class Populate {
     this.pool = pool;
   }
 
-  async register(basePath: string, globPattern?: string) {
-    const files = await glob(globPattern || "*", {
+  register(basePath: string, globPattern?: string) {
+    const files = globSync(globPattern || "*", {
       cwd: path.resolve(basePath),
     });
 
@@ -82,7 +78,7 @@ export class Populate {
     ];
   }
 
-  async start(options?: CallbackOptions) {
+  async start() {
     if (this.files.length === 0) throw new Error("No files registred.");
 
     const client = await this.pool!.connect();
@@ -122,7 +118,13 @@ export class Populate {
     const tasks = this.files.map(async (file) => {
       await pipeline(
         this.streamFile(file)
-          .pipe(options?.transformer || new PassThrough({ objectMode: true }))
+          .pipe(
+            new Transform({
+              objectMode: true,
+              transform: async (chunk, enc, callback) =>
+                callback(null, await this.parse(chunk)),
+            })
+          )
           .pipe(new ColumnParserTransformer(this.config.tables))
           .pipe(
             stringify({
@@ -171,15 +173,22 @@ export class Populate {
       await client.query(`ANALYZE "${table}"`);
     }
 
-    if (options?.finish) options?.finish?.(client);
+    await this.onFinish();
 
     await client.query("COMMIT");
 
     client.release();
   }
 
-  async finish() {
+  async end() {
     await this.pool!.end();
+  }
+
+  // callbacks
+  async onFinish() {}
+
+  async parse(row: Row): Promise<Row> {
+    return row;
   }
 
   private streamFile(filePath: string) {
@@ -405,57 +414,3 @@ export class Populate {
 }
 
 export { ConnectionConfig };
-
-class ColumnParserTransformer extends Transform {
-  tables: PopulateConfig["tables"];
-
-  constructor(tables: PopulateConfig["tables"]) {
-    super({ objectMode: true });
-    this.tables = tables;
-  }
-
-  async _transform(
-    row: { [column: string]: unknown },
-    enc: BufferEncoding,
-    callback: TransformCallback
-  ) {
-    const transformedRow: { [column: string]: unknown } = {};
-
-    for (const [key, value] of Object.entries(row)) {
-      for (const [tableName, columns] of Object.entries(this.tables)) {
-        const column = columns.find(
-          (col) =>
-            col.csvColumn === key ||
-            (col.csvColumn === undefined && col.databaseColumn === key)
-        );
-
-        if (column) {
-          transformedRow[`${tableName}_${column.databaseColumn}`] = value;
-          break;
-        }
-      }
-    }
-
-    const allColumns = Object.entries(this.tables).flatMap(
-      ([tableName, columns]) => columns.map((c) => ({ ...c, tableName }))
-    );
-
-    const refColumns = allColumns.filter(({ ref }) => ref);
-
-    for (const column of refColumns) {
-      const referencedColumn = allColumns.find((col) => {
-        return (
-          col.csvColumn === column.ref ||
-          (col.csvColumn === undefined && col.databaseColumn === column.ref)
-        );
-      });
-
-      if (!referencedColumn) return;
-
-      transformedRow[`${column.tableName}_${column.databaseColumn}`] =
-        row[referencedColumn.csvColumn || referencedColumn.databaseColumn];
-    }
-
-    callback(null, transformedRow);
-  }
-}

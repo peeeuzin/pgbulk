@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc --build",
     "test": "docker compose up -d --wait && jest",
+    "lint": "eslint --ignore-pattern build/**/*",
     "test:faker": "ts-node ./tests/populate.faker.ts"
   },
   "keywords": [],
