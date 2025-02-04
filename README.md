@@ -52,6 +52,6 @@ class Users extends Populate {
 
 const usersPopulate = new Users("<postgres_url>");
 
-await usersPopulate.start()
-await usersPopulate.finish()
+await usersPopulate.start();
+await usersPopulate.finish();
 ```
