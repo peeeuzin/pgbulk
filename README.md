@@ -17,7 +17,7 @@ class Users extends Populate {
         connectionString: connectionURL,
       },
       strategy: "csv",
-      tables: [
+      tables: {
         users: [
           {
             databaseColumn: "id",
@@ -35,7 +35,7 @@ class Users extends Populate {
             type: "TEXT",
           },
         ]
-      ],
+      },
       allowDisableIndexes: true,
       allowDisableForeignKeys: true,
     })
