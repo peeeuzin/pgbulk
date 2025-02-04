@@ -1,10 +1,10 @@
 import { Transform, TransformCallback } from "stream";
-import { PopulateConfig } from "./populate";
+import { PGBulkConfig } from "./pgbulk";
 
 export class ColumnParserTransformer extends Transform {
-  tables: PopulateConfig["tables"];
+  tables: PGBulkConfig["tables"];
 
-  constructor(tables: PopulateConfig["tables"]) {
+  constructor(tables: PGBulkConfig["tables"]) {
     super({ objectMode: true });
     this.tables = tables;
   }

@@ -1,19 +1,32 @@
 {
-  "name": "populate",
+  "name": "pgbulk",
   "version": "0.1.0",
-  "description": "A script for populate large amounts of data to PostgreSQL database in TypeScript",
-  "main": "index.js",
+  "description": "A library for populate large amounts of data to PostgreSQL database in TypeScript",
+  "main": "./build/index.js",
   "scripts": {
     "build": "tsc --build",
     "test": "docker compose up -d --wait && jest",
     "lint": "eslint --ignore-pattern build/**/*",
-    "test:faker": "ts-node ./tests/populate.faker.ts"
+    "test:faker": "ts-node ./tests/populate.faker.ts",
+    "prepare": "pnpm build"
   },
-  "keywords": [],
+  "keywords": [
+    "postgres",
+    "bulk insert",
+    "populate",
+    "pgbulk"
+  ],
+  "files": [
+    "build"
+  ],
   "type": "module",
   "author": "Pedro Augusto <contato.pedrinfx@gmail.com>",
   "types": "build/index.d.ts",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "hhttps://github.com/peeeuzin/pgbulk.git"
+  },
   "dependencies": {
     "@types/papaparse": "^5.3.15",
     "csv-parser": "^3.2.0",

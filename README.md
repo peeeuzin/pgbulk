@@ -1,8 +1,8 @@
-# Populate
+# pgbulk
 ![GitHub License](https://img.shields.io/github/license/peeeuzin/populate)
 ![GitHub Issues or Pull Requests](https://img.shields.io/github/issues-pr/peeeuzin/populate)
 
-## What's populate?
+## What's pgbulk?
 A library for bulk inserts into PostgreSQL with TypeScript, you just need to parse it.
 
 Populate can be used for bulk insert CSV files into PostgreSQL with performance.

@@ -1,9 +1,9 @@
 import path from "path";
-import { Populate } from "../src";
+import { PGBulk } from "../src";
 import { createCSVFile } from "../utils/faker";
 import { Client } from "pg";
 
-class PopulateTest extends Populate {
+class PGBulkTest extends PGBulk {
   constructor(connectionURL: string) {
     super({
       connection: {
@@ -73,7 +73,7 @@ class PopulateTest extends Populate {
 
 describe("Populate", () => {
   const connectionURL =
-    "postgresql://postgres:postgres@localhost:5432/populate-test";
+    "postgresql://postgres:postgres@localhost:5432/pgbulk-test";
 
   jest.setTimeout(120000);
 
@@ -111,7 +111,7 @@ describe("Populate", () => {
   });
 
   it("should start populate files", async () => {
-    const populate = new PopulateTest(connectionURL);
+    const populate = new PGBulkTest(connectionURL);
 
     await Promise.all([
       await createCSVFile(

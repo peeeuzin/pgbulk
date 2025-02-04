@@ -25,7 +25,7 @@ type Constraint = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Row = { [column: string]: any };
 
-export type PopulateConfig = {
+export type PGBulkConfig = {
   strategy?: "csv";
   csvConfig?: csv.Options;
   allowDisableForeignKeys?: boolean;
@@ -46,17 +46,17 @@ export type PopulateConfig = {
   };
 };
 
-export abstract class Populate {
-  readonly config: PopulateConfig;
+export abstract class PGBulk {
+  readonly config: PGBulkConfig;
 
   protected pool?: Pool;
   protected temporaryTableName;
 
   files: string[] = [];
 
-  constructor(config: PopulateConfig) {
+  constructor(config: PGBulkConfig) {
     this.config = config;
-    this.temporaryTableName = config.temporaryTableName || "staging_populate";
+    this.temporaryTableName = config.temporaryTableName || "staging_pgbulk";
 
     const pool = new Pool({
       ...this.config.connection,
