@@ -1,7 +1,8 @@
 import { ConnectionConfig, Pool, PoolClient, PoolConfig } from "pg";
 import fs from "fs";
 import path from "path";
-import { stringify, parser, parse } from "csv";
+import csv from "csv-parser";
+import { stringify } from "csv";
 import { from as copyFrom } from "pg-copy-streams";
 import { format } from "util";
 import { pipeline } from "node:stream/promises";
@@ -27,7 +28,7 @@ export type Row = { [column: string]: any };
 export interface PGBulkConfig {
   strategy?: "csv";
   readStreamConfig?: internal.ReadableOptions;
-  csvConfig?: parser.Options;
+  csvConfig?: csv.Options;
   /**
    * This option will temporarily delete all *foreign keys* constraints on the defined tables.
    *
@@ -268,7 +269,7 @@ export class PGBulk {
   private streamFile(filePath: string) {
     return fs
       .createReadStream(filePath, this.config.readStreamConfig)
-      .pipe(parse(this.config.csvConfig));
+      .pipe(csv(this.config.csvConfig));
   }
 
   private async pushToTable(client: PoolClient) {

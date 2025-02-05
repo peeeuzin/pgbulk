@@ -20,7 +20,7 @@ jobs:
           pnpm install --frozen-lockfile
       - name: Run tests
         run: |
-          pnpm run test
+          pnpm run test --detectOpenHandles
 
   lint:
     runs-on: ubuntu-latest
