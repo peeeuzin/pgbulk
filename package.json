@@ -28,25 +28,20 @@
     "url": "https://github.com/peeeuzin/pgbulk.git"
   },
   "dependencies": {
-    "@types/papaparse": "^5.3.15",
-    "csv-parser": "^3.2.0",
+    "csv": "^6.3.11",
     "glob": "^11.0.1",
-    "papaparse": "^5.5.2",
     "pg": "^8.13.1",
     "pg-copy-streams": "^6.0.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",
     "@faker-js/faker": "^9.4.0",
-    "@testcontainers/postgresql": "^10.17.2",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.13.0",
     "@types/pg": "^8.11.11",
     "@types/pg-copy-streams": "^1.2.5",
-    "csv": "^6.3.11",
     "eslint": "^9.19.0",
     "jest": "^29.7.0",
-    "testcontainers": "^10.17.2",
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.3",

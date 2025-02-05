@@ -59,7 +59,7 @@ describe("Populate", () => {
           strategy: "csv",
           quiet: true,
           csvConfig: {
-            headers: [
+            columns: [
               "id",
               "age",
               "name",
@@ -154,7 +154,7 @@ describe("Populate", () => {
           strategy: "csv",
           quiet: true,
           csvConfig: {
-            headers: [
+            columns: [
               "id",
               "age",
               "name",
