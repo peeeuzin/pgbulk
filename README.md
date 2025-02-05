@@ -1,6 +1,6 @@
 # pgbulk
-![GitHub License](https://img.shields.io/github/license/peeeuzin/populate)
-![GitHub Issues or Pull Requests](https://img.shields.io/github/issues-pr/peeeuzin/populate)
+[![GitHub License](https://img.shields.io/github/license/peeeuzin/populate)](https://github.com/peeeuzin/pgbulk/blob/main/LICENSE)
+[![GitHub Issues or Pull Requests](https://img.shields.io/github/issues-pr/peeeuzin/populate)](https://github.com/peeeuzin/pgbulk/pulls)
 
 ## What's pgbulk?
 A library for bulk inserts into PostgreSQL with TypeScript, you just need to parse it.
@@ -10,9 +10,14 @@ Populate can be used for bulk insert CSV files into PostgreSQL with performance.
 ## Installation
 You can install the package using npm:
 ```bash
-npm install pgbulk # npm 
-yarn add pgbulk # yarn
-pnpm add pgbulk # pnpm 
+# npm
+npm install pgbulk 
+
+# yarn
+yarn add pgbulk
+
+# pnpm
+pnpm add pgbulk
 ```
 
 ## Example

@@ -25,15 +25,50 @@ type Constraint = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Row = { [column: string]: any };
 
-export type PGBulkConfig = {
+export interface PGBulkConfig {
   strategy?: "csv";
   csvConfig?: csv.Options;
+  /**
+   * This option will temporarily delete all *foreign keys* constraints on the defined tables.
+   * This option can cause loss of error checking while the constraints is missing, but, it will increase data load speed.
+   *
+   * See [PostgreSQL Populate documentation](https://www.postgresql.org/docs/current/populate.html#POPULATE-RM-FKEYS) to see more.
+   * @default false
+   * */
   allowDisableForeignKeys?: boolean;
+
+  /**
+   * This option will temporarily delete all *indexes* (this will not delete unique indexes) on the defined tables.
+   * This option can cause performance loss for other users during the time the indexes if missing, but, it will increase data load speed.
+   *
+   * See [PostgreSQL Populate documentation](https://www.postgresql.org/docs/current/populate.html#POPULATE-RM-INDEXES) to see more.
+   * @default false
+   * */
   allowDisableIndexes?: boolean;
+
+  /**
+   * Quiet mode
+   *
+   * @default false
+   */
   quiet?: boolean;
+
+  /**
+   * PostgreSQL Client config
+   *
+   * See [pg documentation](https://node-postgres.com/apis/client#new-client)
+   */
   connection: PoolConfig;
   schema?: string;
+  /**
+   * Set temporary table name
+   *
+   * @default "staging_pgbulk"
+   */
   temporaryTableName?: string;
+  /**
+   * Define all tables to bulk insert
+   */
   tables: {
     [tableName: string]: {
       databaseColumn: string;
@@ -44,10 +79,11 @@ export type PGBulkConfig = {
       castType?: string;
     }[];
   };
-};
+}
 
-export abstract class PGBulk {
+export class PGBulk {
   readonly config: PGBulkConfig;
+  readonly usingTemporaryTableStrategy: boolean;
 
   protected pool?: Pool;
   protected temporaryTableName;
@@ -57,6 +93,7 @@ export abstract class PGBulk {
   constructor(config: PGBulkConfig) {
     this.config = config;
     this.temporaryTableName = config.temporaryTableName || "staging_pgbulk";
+    this.usingTemporaryTableStrategy = this.canUseTemporaryTableStrategy();
 
     const pool = new Pool({
       ...this.config.connection,
@@ -85,7 +122,8 @@ export abstract class PGBulk {
 
     await client.query("BEGIN");
 
-    await this.createTemporaryTable(client);
+    if (this.usingTemporaryTableStrategy)
+      await this.createTemporaryTable(client);
 
     let indexes: Index[] = [];
     let constraints: Constraint[] = [];
@@ -137,7 +175,8 @@ export abstract class PGBulk {
 
     await Promise.all(tasks);
 
-    await client.query(`ANALYZE "${this.temporaryTableName}"`);
+    if (this.usingTemporaryTableStrategy)
+      await client.query(`ANALYZE "${this.temporaryTableName}"`);
 
     // remove indexes and constraints
     // see: https://www.postgresql.org/docs/current/populate.html#POPULATE-RM-INDEXES
@@ -148,7 +187,7 @@ export abstract class PGBulk {
     ]);
 
     // populate to actual tables
-    await this.pushToTable(client);
+    if (this.usingTemporaryTableStrategy) await this.pushToTable(client);
 
     // recreate all indexes and contraints
     await Promise.all([
@@ -178,6 +217,14 @@ export abstract class PGBulk {
     await client.query("COMMIT");
 
     client.release();
+  }
+
+  static async startAll(bulks: PGBulk[]) {
+    const tasks = bulks.map(async (bulk) => {
+      return await bulk.start();
+    });
+
+    await Promise.all(tasks);
   }
 
   async end() {
@@ -247,11 +294,19 @@ export abstract class PGBulk {
   }
 
   private buildCopyQuery() {
-    const columns = this.getTemporaryTableColumns()
-      .map((column) => `"${column}"`)
-      .join(", ");
+    const columns = this.usingTemporaryTableStrategy
+      ? this.getTemporaryTableColumns()
+          .map((column) => `"${column}"`)
+          .join(", ")
+      : this.getAllDefinedColumns()
+          .map((column) => `"${column.databaseColumn}"`)
+          .join(", ");
 
-    return `COPY ${this.temporaryTableName}(${columns}) FROM STDIN (FORMAT CSV)`;
+    const table = this.usingTemporaryTableStrategy
+      ? this.temporaryTableName
+      : this.getAllDefinedTables()[0];
+
+    return `COPY "${table}"(${columns}) FROM STDIN (FORMAT CSV)`;
   }
 
   private async getConstraintsFromTable(
@@ -394,7 +449,7 @@ export abstract class PGBulk {
     if (!matches) throw new Error("Constraints does not match. Rolled back");
   }
 
-  private getTemporaryTableColumns() {
+  private getAllDefinedColumns() {
     const columns = Object.values(this.config.tables).flatMap((fields, index) =>
       fields.map(({ databaseColumn, type }) => ({
         databaseColumn,
@@ -403,6 +458,12 @@ export abstract class PGBulk {
       }))
     );
 
+    return columns;
+  }
+
+  private getTemporaryTableColumns() {
+    const columns = this.getAllDefinedColumns();
+
     return columns.map(
       ({ databaseColumn, tableName }) => `${tableName}_${databaseColumn}`
     );
@@ -410,6 +471,16 @@ export abstract class PGBulk {
 
   private getAllDefinedTables() {
     return Object.keys(this.config.tables);
+  }
+
+  private canUseTemporaryTableStrategy() {
+    const definedTables = this.getAllDefinedTables();
+
+    const hasCastingOrUnnest = Object.values(this.config.tables).some(
+      (columns) => columns.some((column) => column.castType || column.unnest)
+    );
+
+    return definedTables.length > 1 || hasCastingOrUnnest;
   }
 }
 
