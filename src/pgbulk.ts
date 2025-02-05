@@ -65,6 +65,15 @@ export interface PGBulkConfig {
   forceDisableUniqueIndexes?: boolean;
 
   /**
+   * This option will force to use temporary table strategy.
+   *
+   * This can be useful if you want to use `ON CONFLICT DO NOTHING`
+   *
+   * @default false
+   */
+  useTemporaryTableStrategy?: boolean;
+
+  /**
    * Quiet mode
    *
    * @default false
@@ -111,7 +120,8 @@ export class PGBulk {
   constructor(config: PGBulkConfig) {
     this.config = config;
     this.temporaryTableName = config.temporaryTableName || "staging_pgbulk";
-    this.usingTemporaryTableStrategy = this.canUseTemporaryTableStrategy();
+    this.usingTemporaryTableStrategy =
+      config.useTemporaryTableStrategy || this.canUseTemporaryTableStrategy();
 
     const pool = new Pool({
       ...this.config.connection,
