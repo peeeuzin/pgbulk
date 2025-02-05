@@ -6,7 +6,7 @@ import { stringify } from "csv";
 import { from as copyFrom } from "pg-copy-streams";
 import { format } from "util";
 import { pipeline } from "node:stream/promises";
-import { Transform } from "stream";
+import internal, { Transform } from "stream";
 import { ColumnParserTransformer } from "./columnParserTransformer";
 import { globSync } from "glob";
 
@@ -27,10 +27,15 @@ export type Row = { [column: string]: any };
 
 export interface PGBulkConfig {
   strategy?: "csv";
+  readStreamConfig?: internal.ReadableOptions;
   csvConfig?: csv.Options;
   /**
    * This option will temporarily delete all *foreign keys* constraints on the defined tables.
-   * This option can cause loss of error checking while the constraints is missing, but, it will increase data load speed.
+   *
+   * **Warning:** This option can cause loss of error checking while the constraints is missing, but, it will increase data load speed.
+   *
+   * Temporarily increasing the [maintenance_work_mem](https://www.postgresql.org/docs/current/runtime-config-resource.html#GUC-MAINTENANCE-WORK-MEM) on Postgres
+   * configuration variable can also improve performance when recreating foreign keys. See [PostgreSQL documentation](https://www.postgresql.org/docs/current/populate.html#POPULATE-WORK-MEM)
    *
    * See [PostgreSQL Populate documentation](https://www.postgresql.org/docs/current/populate.html#POPULATE-RM-FKEYS) to see more.
    * @default false
@@ -38,13 +43,26 @@ export interface PGBulkConfig {
   allowDisableForeignKeys?: boolean;
 
   /**
-   * This option will temporarily delete all *indexes* (this will not delete unique indexes) on the defined tables.
+   * This option will temporarily delete all *indexes* (this will not delete unique indexes, to delete unique indexes check `forceDisableUniqueIndexes` option) on the defined tables.
    * This option can cause performance loss for other users during the time the indexes if missing, but, it will increase data load speed.
+   *
+   *  Temporarily increasing the [maintenance_work_mem](https://www.postgresql.org/docs/current/runtime-config-resource.html#GUC-MAINTENANCE-WORK-MEM) on Postgres
+   * configuration variable can also improve performance when recreating indexes. [PostgreSQL documentation](https://www.postgresql.org/docs/current/populate.html#POPULATE-WORK-MEM)
    *
    * See [PostgreSQL Populate documentation](https://www.postgresql.org/docs/current/populate.html#POPULATE-RM-INDEXES) to see more.
    * @default false
    * */
   allowDisableIndexes?: boolean;
+
+  /**
+   * This option will temporarily delete all unique indexes on the defined tables.
+   *
+   * **Warning:** Error checking afforded by the unique constraint will be lost while the index is missing. You should think twice before set this option to true.
+   *
+   * See [PostgreSQL Populate documentation](https://www.postgresql.org/docs/current/populate.html#POPULATE-RM-INDEXES) to see more.
+   * @default false
+   * */
+  forceDisableUniqueIndexes?: boolean;
 
   /**
    * Quiet mode
@@ -239,7 +257,9 @@ export class PGBulk {
   }
 
   private streamFile(filePath: string) {
-    return fs.createReadStream(filePath).pipe(csv(this.config.csvConfig));
+    return fs
+      .createReadStream(filePath, this.config.readStreamConfig)
+      .pipe(csv(this.config.csvConfig));
   }
 
   private async pushToTable(client: PoolClient) {
@@ -335,6 +355,10 @@ export class PGBulk {
     client: PoolClient,
     tableName: string
   ): Promise<Index[]> {
+    const whereClauseNotUniqueIndex = this.config.forceDisableUniqueIndexes
+      ? ""
+      : "AND indexdef NOT ILIKE 'CREATE UNIQUE INDEX%'";
+
     return (
       await client.query(
         `SELECT 
@@ -343,7 +367,7 @@ export class PGBulk {
           $1::text AS "tableName"
         FROM pg_indexes 
         WHERE tablename = $1
-        AND indexdef NOT ILIKE 'CREATE UNIQUE INDEX%'`,
+        ${whereClauseNotUniqueIndex}`,
         [tableName]
       )
     ).rows;
