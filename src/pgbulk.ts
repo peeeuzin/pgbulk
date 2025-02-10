@@ -184,9 +184,8 @@ export class PGBulk {
       }
     }
 
-    const copyStream = client.query(copyFrom(this.buildCopyQuery()));
-
     for (const file of this.files) {
+      const copyStream = client.query(copyFrom(this.buildCopyQuery()));
       this.logger.info("Starting copying %s", file);
 
       await pipeline(
