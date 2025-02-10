@@ -2,7 +2,7 @@ import { faker } from "@faker-js/faker";
 import { createWriteStream } from "fs";
 import { Readable, pipeline } from "stream";
 import { promisify } from "util";
-import { stringify } from "csv";
+import { stringify } from "csv-stringify";
 
 const pipelineAsync = promisify(pipeline);
 

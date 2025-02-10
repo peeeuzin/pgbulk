@@ -27,8 +27,8 @@
     "url": "https://github.com/peeeuzin/pgbulk.git"
   },
   "dependencies": {
-    "csv": "^6.3.11",
     "csv-parser": "^3.2.0",
+    "csv-stringify": "^6.5.2",
     "glob": "^11.0.1",
     "pg": "^8.13.1",
     "pg-copy-streams": "^6.0.6"

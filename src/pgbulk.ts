@@ -2,7 +2,7 @@ import { ConnectionConfig, Pool, PoolClient, PoolConfig } from "pg";
 import fs from "fs";
 import path from "path";
 import csv from "csv-parser";
-import { stringify } from "csv";
+import { stringify } from "csv-stringify";
 import { from as copyFrom } from "pg-copy-streams";
 import { format } from "util";
 import { pipeline } from "node:stream/promises";
