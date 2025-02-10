@@ -186,7 +186,7 @@ export class PGBulk {
 
     const copyStream = client.query(copyFrom(this.buildCopyQuery()));
 
-    const tasks = this.files.map(async (file) => {
+    for (const file of this.files) {
       this.logger.info("Starting copying %s", file);
 
       await pipeline(
@@ -208,9 +208,7 @@ export class PGBulk {
       );
 
       this.logger.info("Done copying %s", file);
-    });
-
-    await Promise.all(tasks);
+    }
 
     if (this.usingTemporaryTableStrategy)
       await client.query(`ANALYZE "${this.temporaryTableName}"`);
