@@ -9,6 +9,7 @@ import { pipeline } from "node:stream/promises";
 import internal, { Transform } from "stream";
 import { ColumnParserTransformer } from "./columnParserTransformer";
 import { globSync } from "glob";
+import { Logger } from "./logger";
 
 type Index = {
   name: string;
@@ -115,6 +116,8 @@ export class PGBulk {
   protected pool?: Pool;
   protected temporaryTableName;
 
+  private logger: Logger;
+
   files: string[] = [];
 
   constructor(config: PGBulkConfig) {
@@ -122,6 +125,8 @@ export class PGBulk {
     this.temporaryTableName = config.temporaryTableName || "staging_pgbulk";
     this.usingTemporaryTableStrategy =
       config.useTemporaryTableStrategy || this.canUseTemporaryTableStrategy();
+
+    this.logger = new Logger(this.constructor.name, config.quiet || false);
 
     const pool = new Pool({
       ...this.config.connection,
@@ -182,6 +187,8 @@ export class PGBulk {
     const copyStream = client.query(copyFrom(this.buildCopyQuery()));
 
     const tasks = this.files.map(async (file) => {
+      this.logger.info("Starting copying %s", file);
+
       await pipeline(
         this.streamFile(file)
           .pipe(
@@ -199,6 +206,8 @@ export class PGBulk {
           ),
         copyStream
       );
+
+      this.logger.info("Done copying %s", file);
     });
 
     await Promise.all(tasks);
@@ -273,6 +282,8 @@ export class PGBulk {
   }
 
   private async pushToTable(client: PoolClient) {
+    this.logger.info("Pushing data to tables");
+
     const selects = this.getAllDefinedTables().flatMap((tableName) => {
       const columns = this.config.tables[tableName];
 
@@ -386,6 +397,8 @@ export class PGBulk {
   private async removeAllIndexes(client: PoolClient, indexes: Index[]) {
     if (indexes.length === 0) return;
 
+    this.logger.info("Removing %s indexes", indexes.length.toString());
+
     const indexesName = indexes.map(({ name }) => `"${name}"`).join(", ");
 
     await client.query(format(`DROP INDEX IF EXISTS %s RESTRICT`, indexesName));
@@ -396,6 +409,11 @@ export class PGBulk {
     constraints: Constraint[]
   ) {
     if (constraints.length === 0) return;
+
+    this.logger.info(
+      "Removing %s foreign constraints",
+      constraints.length.toString()
+    );
 
     const query = constraints
       .map(
@@ -410,6 +428,8 @@ export class PGBulk {
   private async recreateAllIndexes(client: PoolClient, indexes: Index[]) {
     if (indexes.length === 0) return;
 
+    this.logger.info("Recreating %s indexes", indexes.length.toString());
+
     const query = indexes.map(({ definition }) => definition).join("; ");
 
     await client.query(query);
@@ -420,6 +440,11 @@ export class PGBulk {
     constraints: Constraint[]
   ) {
     if (constraints.length === 0) return;
+
+    this.logger.info(
+      "Recreating %s foreign constraints",
+      constraints.length.toString()
+    );
 
     const query = constraints
       .map(
