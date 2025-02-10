@@ -1,6 +1,6 @@
 {
   "name": "pgbulk",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "A library for populate large amounts of data to PostgreSQL database in TypeScript",
   "main": "./build/index.js",
   "scripts": {
