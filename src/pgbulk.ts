@@ -297,10 +297,13 @@ export class PGBulk {
     });
 
     const query = this.getAllDefinedTables()
-      .map(
-        (tableName, index) =>
-          `INSERT INTO "${tableName}" SELECT ${selects[index]} FROM "${this.temporaryTableName}" ON CONFLICT DO NOTHING;`
-      )
+      .map((tableName, index) => {
+        const columns = this.config.tables[tableName]
+          .map(({ databaseColumn }) => `"${databaseColumn}"`)
+          .join(", ");
+
+        return `INSERT INTO "${tableName}"(${columns}) SELECT ${selects[index]} FROM "${this.temporaryTableName}" ON CONFLICT DO NOTHING;`;
+      })
       .join(" ");
 
     await client.query(query);
