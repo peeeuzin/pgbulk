@@ -1,4 +1,10 @@
-import { ConnectionConfig, Pool, PoolClient, PoolConfig } from "pg";
+import {
+  ConnectionConfig,
+  Pool,
+  PoolClient,
+  PoolConfig,
+  QueryConfigValues,
+} from "pg";
 import fs from "fs";
 import path from "path";
 import csv from "csv-parser";
@@ -105,6 +111,16 @@ export interface PGBulkConfig {
       ref?: string;
       unnest?: boolean;
       castType?: string;
+      foreign?: {
+        tableName: string;
+        references: string;
+      };
+      ifForeignKeyIsNotPresent?:
+        | "delete"
+        | {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            fallback: QueryConfigValues<any>;
+          };
     }[];
   };
 }
@@ -296,6 +312,8 @@ export class PGBulk {
         .join(", ");
     });
 
+    await this.fixForeignIssues(client);
+
     const query = this.getAllDefinedTables()
       .map((tableName, index) => {
         const columns = this.config.tables[tableName]
@@ -307,6 +325,45 @@ export class PGBulk {
       .join(" ");
 
     await client.query(query);
+  }
+
+  private async fixForeignIssues(client: PoolClient) {
+    const tables = this.getAllDefinedTables();
+
+    this.logger.info("Trying to fix foreign issues");
+
+    for (const tableName of tables) {
+      const columns = this.config.tables[tableName];
+
+      for (const column of columns) {
+        if (!column.ifForeignKeyIsNotPresent) continue;
+
+        const { databaseColumn, ifForeignKeyIsNotPresent, foreign } = column;
+
+        const tempRow = `"${tableName}_${databaseColumn}"`;
+
+        let query = "";
+        const values = [];
+
+        if (typeof ifForeignKeyIsNotPresent !== "string") {
+          query = `UPDATE "${this.temporaryTableName}" SET ${tempRow} = $1 WHERE ${tempRow} NOT IN (SELECT "${foreign?.references}" FROM "${foreign?.tableName}")`;
+          values.push(ifForeignKeyIsNotPresent.fallback);
+        } else if (ifForeignKeyIsNotPresent === "delete") {
+          query = `DELETE FROM "${this.temporaryTableName}" WHERE ${tempRow} NOT IN (SELECT "${foreign?.references}" FROM "${foreign?.tableName}")`;
+        } else {
+          throw new Error(`Unknown action ${ifForeignKeyIsNotPresent}`);
+        }
+
+        const { rowCount } = await client.query(query, values);
+
+        this.logger.info(
+          'Fixed %s rows with unknown foreign key in column "%s" on table "%s"',
+          rowCount?.toString?.() || "0",
+          databaseColumn,
+          tableName
+        );
+      }
+    }
   }
 
   private async createTemporaryTable(client: PoolClient) {
