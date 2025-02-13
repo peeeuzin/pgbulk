@@ -371,19 +371,21 @@ export class PGBulk {
 
         const { databaseColumn, ifForeignKeyIsNotPresent, foreign } = column;
 
-        const tempRow = `"${tableName}_${databaseColumn}"`;
+        const tempRow = `${tableName}_${databaseColumn}`;
 
         let query = "";
         const values = [];
 
         if (typeof ifForeignKeyIsNotPresent !== "string") {
-          query = `UPDATE "${this.temporaryTableName}" SET ${tempRow} = $1 WHERE ${tempRow} NOT IN (SELECT "${foreign?.references}" FROM "${foreign?.tableName}")`;
+          query = `UPDATE "${this.temporaryTableName}" t SET "${tempRow}" = $1 WHERE NOT EXISTS (SELECT 1 FROM "${foreign?.tableName}" r WHERE r."${foreign?.references}" = t."${tempRow}")`;
           values.push(ifForeignKeyIsNotPresent.fallback);
         } else if (ifForeignKeyIsNotPresent === "delete") {
-          query = `DELETE FROM "${this.temporaryTableName}" WHERE ${tempRow} NOT IN (SELECT "${foreign?.references}" FROM "${foreign?.tableName}")`;
+          query = `DELETE FROM "${this.temporaryTableName}" t WHERE NOT EXISTS (SELECT 1 FROM "${foreign?.tableName}" r WHERE r."${foreign?.references}" = t."${tempRow}")`;
         } else {
           throw new Error(`Unknown action ${ifForeignKeyIsNotPresent}`);
         }
+
+        console.log(query);
 
         const { rowCount } = await client.query(query, values);
 
