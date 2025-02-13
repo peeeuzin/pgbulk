@@ -111,6 +111,7 @@ export interface PGBulkConfig {
       ref?: string;
       unnest?: boolean;
       castType?: string;
+      createTempIndex?: boolean;
       foreign?: {
         tableName: string;
         references: string;
@@ -202,7 +203,7 @@ export class PGBulk {
 
     for (const file of this.files) {
       const copyStream = client.query(copyFrom(this.buildCopyQuery()));
-      this.logger.info("Starting copying %s", file);
+      this.logger.info("Starting copying %s.", file);
 
       await pipeline(
         this.streamFile(file)
@@ -222,7 +223,7 @@ export class PGBulk {
         copyStream
       );
 
-      this.logger.info("Done copying %s", file);
+      this.logger.info("Done copying %s.", file);
     }
 
     if (this.usingTemporaryTableStrategy)
@@ -266,6 +267,8 @@ export class PGBulk {
 
     await client.query("COMMIT");
 
+    this.logger.info("All entries is now inserted to PostgreSQL.");
+
     client.release();
   }
 
@@ -295,7 +298,7 @@ export class PGBulk {
   }
 
   private async pushToTable(client: PoolClient) {
-    this.logger.info("Pushing data to tables");
+    this.logger.info("Pushing data to tables.");
 
     const selects = this.getAllDefinedTables().flatMap((tableName) => {
       const columns = this.config.tables[tableName];
@@ -312,7 +315,35 @@ export class PGBulk {
         .join(", ");
     });
 
+    const indexesToCreate = this.getAllDefinedTables().flatMap((tableName) => {
+      const columns = this.config.tables[tableName];
+
+      return columns
+        .filter(({ createTempIndex }) => createTempIndex)
+        .map(({ databaseColumn }) => {
+          const tempRow = `${tableName}_${databaseColumn}`;
+          return tempRow;
+        });
+    });
+
+    const indexesToCreateTasks = indexesToCreate.map(async (tempRow) => {
+      this.logger.info("Creating temporary index for %s.", tempRow);
+      const query = `CREATE INDEX "idx_${this.temporaryTableName}_${tempRow}" ON "${this.temporaryTableName}" ("${tempRow}");`;
+
+      await client.query(query);
+    });
+
+    await Promise.all(indexesToCreateTasks);
+
     await this.fixForeignIssues(client);
+
+    const indexesToDeleteTasks = indexesToCreate.map(async (tempRow) => {
+      const query = `DROP INDEX IF EXISTS "idx_${this.temporaryTableName}_${tempRow}"`;
+
+      await client.query(query);
+    });
+
+    await Promise.all(indexesToDeleteTasks);
 
     const query = this.getAllDefinedTables()
       .map((tableName, index) => {
@@ -330,7 +361,7 @@ export class PGBulk {
   private async fixForeignIssues(client: PoolClient) {
     const tables = this.getAllDefinedTables();
 
-    this.logger.info("Trying to fix foreign issues");
+    this.logger.info("Trying to fix foreign issues.");
 
     for (const tableName of tables) {
       const columns = this.config.tables[tableName];
@@ -357,7 +388,7 @@ export class PGBulk {
         const { rowCount } = await client.query(query, values);
 
         this.logger.info(
-          'Fixed %s rows with unknown foreign key in column "%s" on table "%s"',
+          'Fixed %s rows with unknown foreign key in column "%s" on table "%s".',
           rowCount?.toString?.() || "0",
           databaseColumn,
           tableName
@@ -454,7 +485,7 @@ export class PGBulk {
   private async removeAllIndexes(client: PoolClient, indexes: Index[]) {
     if (indexes.length === 0) return;
 
-    this.logger.info("Removing %s indexes", indexes.length.toString());
+    this.logger.info("Removing %s indexes.", indexes.length.toString());
 
     const indexesName = indexes.map(({ name }) => `"${name}"`).join(", ");
 
@@ -468,7 +499,7 @@ export class PGBulk {
     if (constraints.length === 0) return;
 
     this.logger.info(
-      "Removing %s foreign constraints",
+      "Removing %s foreign constraints.",
       constraints.length.toString()
     );
 
@@ -485,7 +516,7 @@ export class PGBulk {
   private async recreateAllIndexes(client: PoolClient, indexes: Index[]) {
     if (indexes.length === 0) return;
 
-    this.logger.info("Recreating %s indexes", indexes.length.toString());
+    this.logger.info("Recreating %s indexes.", indexes.length.toString());
 
     const query = indexes.map(({ definition }) => definition).join("; ");
 
