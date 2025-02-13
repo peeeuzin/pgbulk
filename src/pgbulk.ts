@@ -284,7 +284,7 @@ export class PGBulk {
   // callbacks
   async onFinish() {}
 
-  async parse(row: Row): Promise<Row | undefined> {
+  parse(row: Row): Promise<Row | undefined> | Row | undefined {
     return row;
   }
 
