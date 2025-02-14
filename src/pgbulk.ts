@@ -298,8 +298,6 @@ export class PGBulk {
   }
 
   private async pushToTable(client: PoolClient) {
-    this.logger.info("Pushing data to tables.");
-
     const selects = this.getAllDefinedTables().flatMap((tableName) => {
       const columns = this.config.tables[tableName];
 
@@ -355,6 +353,8 @@ export class PGBulk {
       })
       .join(" ");
 
+    this.logger.info("Pushing data to tables.");
+
     await client.query(query);
   }
 
@@ -377,15 +377,13 @@ export class PGBulk {
         const values = [];
 
         if (typeof ifForeignKeyIsNotPresent !== "string") {
-          query = `UPDATE "${this.temporaryTableName}" t SET "${tempRow}" = $1 WHERE IS NOT NULL AND NOT EXISTS (SELECT 1 FROM "${foreign?.tableName}" r WHERE r."${foreign?.references}" = t."${tempRow}")`;
+          query = `UPDATE "${this.temporaryTableName}" t SET "${tempRow}" = $1 WHERE "${tempRow}" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM "${foreign?.tableName}" r WHERE r."${foreign?.references}" = t."${tempRow}")`;
           values.push(ifForeignKeyIsNotPresent.fallback);
         } else if (ifForeignKeyIsNotPresent === "delete") {
-          query = `DELETE FROM "${this.temporaryTableName}" t WHERE IS NOT NULL AND NOT EXISTS (SELECT 1 FROM "${foreign?.tableName}" r WHERE r."${foreign?.references}" = t."${tempRow}")`;
+          query = `DELETE FROM "${this.temporaryTableName}" t WHERE "${tempRow}" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM "${foreign?.tableName}" r WHERE r."${foreign?.references}" = t."${tempRow}")`;
         } else {
           throw new Error(`Unknown action ${ifForeignKeyIsNotPresent}`);
         }
-
-        console.log(query);
 
         const { rowCount } = await client.query(query, values);
 
