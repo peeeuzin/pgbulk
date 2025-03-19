@@ -495,7 +495,7 @@ export class PGBulk {
 
     const indexesName = indexes.map(({ name }) => `"${name}"`).join(", ");
 
-    await client.query(format(`DROP INDEX IF EXISTS %s`, indexesName));
+    await client.query(format(`DROP INDEX "%s".%s`, this.schema, indexesName));
   }
 
   private async removeAllForeignConstraints(
