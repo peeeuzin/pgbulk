@@ -493,9 +493,11 @@ export class PGBulk {
 
     this.logger.info("Removing %s indexes.", indexes.length.toString());
 
-    const indexesName = indexes.map(({ name }) => `"${name}"`).join(", ");
+    const indexesName = indexes
+      .map(({ name }) => `"${this.schema}"."${name}"`)
+      .join(", ");
 
-    await client.query(format(`DROP INDEX "%s".%s`, this.schema, indexesName));
+    await client.query(format(`DROP INDEX %s`, indexesName));
   }
 
   private async removeAllForeignConstraints(
