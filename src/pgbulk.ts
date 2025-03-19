@@ -134,6 +134,7 @@ export class PGBulk {
   protected temporaryTableName;
 
   private logger: Logger;
+  private schema = "public";
 
   files: string[] = [];
 
@@ -147,9 +148,12 @@ export class PGBulk {
 
     const pool = new Pool({
       ...this.config.connection,
+
       allowExitOnIdle: true,
       max: 30,
     });
+
+    if (config.schema) this.schema = config.schema;
 
     this.pool = pool;
   }
@@ -260,7 +264,7 @@ export class PGBulk {
 
     // analyze tables to update the planner
     for (const table of this.getAllDefinedTables()) {
-      await client.query(`ANALYZE "${table}"`);
+      await client.query(`ANALYZE "${this.schema}"."${table}"`);
     }
 
     await this.onFinish();
@@ -349,7 +353,7 @@ export class PGBulk {
           .map(({ databaseColumn }) => `"${databaseColumn}"`)
           .join(", ");
 
-        return `INSERT INTO "${tableName}"(${columns}) SELECT ${selects[index]} FROM "${this.temporaryTableName}" ON CONFLICT DO NOTHING;`;
+        return `INSERT INTO "${this.schema}"."${tableName}"(${columns}) SELECT ${selects[index]} FROM "${this.temporaryTableName}" ON CONFLICT DO NOTHING;`;
       })
       .join(" ");
 
@@ -377,10 +381,10 @@ export class PGBulk {
         const values = [];
 
         if (typeof ifForeignKeyIsNotPresent !== "string") {
-          query = `UPDATE "${this.temporaryTableName}" t SET "${tempRow}" = $1 WHERE "${tempRow}" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM "${foreign?.tableName}" r WHERE r."${foreign?.references}" = t."${tempRow}")`;
+          query = `UPDATE "${this.temporaryTableName}" t SET "${tempRow}" = $1 WHERE "${tempRow}" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM "${this.schema}"."${foreign?.tableName}" r WHERE r."${foreign?.references}" = t."${tempRow}")`;
           values.push(ifForeignKeyIsNotPresent.fallback);
         } else if (ifForeignKeyIsNotPresent === "delete") {
-          query = `DELETE FROM "${this.temporaryTableName}" t WHERE "${tempRow}" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM "${foreign?.tableName}" r WHERE r."${foreign?.references}" = t."${tempRow}")`;
+          query = `DELETE FROM "${this.temporaryTableName}" t WHERE "${tempRow}" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM "${this.schema}"."${foreign?.tableName}" r WHERE r."${foreign?.references}" = t."${tempRow}")`;
         } else {
           throw new Error(`Unknown action ${ifForeignKeyIsNotPresent}`);
         }
@@ -432,10 +436,10 @@ export class PGBulk {
           .join(", ");
 
     const table = this.usingTemporaryTableStrategy
-      ? this.temporaryTableName
-      : this.getAllDefinedTables()[0];
+      ? `"${this.temporaryTableName}"`
+      : `"${this.schema}"."${this.getAllDefinedTables()[0]}"`;
 
-    return `COPY "${table}"(${columns}) FROM STDIN (FORMAT CSV)`;
+    return `COPY ${table}(${columns}) FROM STDIN (FORMAT CSV)`;
   }
 
   private async getConstraintsFromTable(
@@ -454,8 +458,9 @@ export class PGBulk {
           JOIN pg_namespace ns ON cl.relnamespace = ns.oid
         WHERE
           cl.relname = $1
-        AND con.contype <> 'p'`,
-        [tableName]
+        AND con.contype <> 'p'
+        AND ns.nspname = $2`,
+        [tableName, this.schema]
       )
     ).rows;
   }
@@ -476,8 +481,9 @@ export class PGBulk {
           $1::text AS "tableName"
         FROM pg_indexes 
         WHERE tablename = $1
+        AND schemaname = $2
         ${whereClauseNotUniqueIndex}`,
-        [tableName]
+        [tableName, this.schema]
       )
     ).rows;
   }
@@ -489,7 +495,7 @@ export class PGBulk {
 
     const indexesName = indexes.map(({ name }) => `"${name}"`).join(", ");
 
-    await client.query(format(`DROP INDEX IF EXISTS %s RESTRICT`, indexesName));
+    await client.query(format(`DROP INDEX IF EXISTS %s`, indexesName));
   }
 
   private async removeAllForeignConstraints(
@@ -506,7 +512,7 @@ export class PGBulk {
     const query = constraints
       .map(
         ({ tableName, constraintName }) =>
-          `ALTER TABLE "${tableName}" DROP CONSTRAINT "${constraintName}"`
+          `ALTER TABLE "${this.schema}"."${tableName}" DROP CONSTRAINT "${constraintName}"`
       )
       .join("; ");
 
@@ -518,7 +524,7 @@ export class PGBulk {
 
     this.logger.info("Recreating %s indexes.", indexes.length.toString());
 
-    const query = indexes.map(({ definition }) => definition).join("; ");
+    const query = indexes.map(({ definition }) => `${definition}`).join("; ");
 
     await client.query(query);
   }
@@ -537,7 +543,7 @@ export class PGBulk {
     const query = constraints
       .map(
         ({ tableName, definition, constraintName }) =>
-          `ALTER TABLE "${tableName}" ADD CONSTRAINT "${constraintName}" ${definition}`
+          `ALTER TABLE "${this.schema}"."${tableName}" ADD CONSTRAINT "${constraintName}" ${definition}`
       )
       .join("; ");
 

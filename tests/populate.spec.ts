@@ -16,33 +16,35 @@ describe("Populate", () => {
     await client.connect();
 
     await client.query(`
-    CREATE TABLE IF NOT EXISTS addresses (
+    CREATE SCHEMA IF NOT EXISTS pgbulk;
+
+    CREATE TABLE IF NOT EXISTS pgbulk.addresses (
       id TEXT PRIMARY KEY,
       street TEXT NOT NULL,
       state TEXT NOT NULL
     );
 
-    CREATE TABLE IF NOT EXISTS users (
+    CREATE TABLE IF NOT EXISTS pgbulk.users (
       id TEXT PRIMARY KEY,
       age INT NOT NULL,
       name TEXT NOT NULL,
       nickname TEXT,
       address TEXT,
 
-      FOREIGN KEY ("address") REFERENCES "addresses" ("id") ON DELETE CASCADE
+      FOREIGN KEY ("address") REFERENCES pgbulk."addresses" ("id") ON DELETE CASCADE
     );
 
-    CREATE INDEX IF NOT EXISTS "name_index" ON users USING btree (name);
+    CREATE INDEX IF NOT EXISTS "name_index" ON pgbulk.users USING btree (name);
 
-    TRUNCATE TABLE users CASCADE;
-    TRUNCATE TABLE addresses CASCADE;
+    TRUNCATE TABLE pgbulk.users CASCADE;
+    TRUNCATE TABLE pgbulk.addresses CASCADE;
     `);
   });
 
   beforeEach(async () => {
     await client.query(`
-    TRUNCATE TABLE users CASCADE;
-    TRUNCATE TABLE addresses CASCADE;`);
+    TRUNCATE TABLE pgbulk.users CASCADE;
+    TRUNCATE TABLE pgbulk.addresses CASCADE;`);
   });
 
   afterAll(async () => {
@@ -112,6 +114,7 @@ describe("Populate", () => {
           },
           allowDisableIndexes: true,
           allowDisableForeignKeys: true,
+          schema: "pgbulk",
         });
 
         this.register(path.join(__dirname, "data"), "test-populate-*.csv");
@@ -136,9 +139,11 @@ describe("Populate", () => {
 
     await populate.start();
 
-    const usersRowCount = (await client.query("SELECT * FROM users")).rowCount;
-    const addressesRowCount = (await client.query("SELECT * FROM addresses"))
+    const usersRowCount = (await client.query("SELECT * FROM pgbulk.users"))
       .rowCount;
+    const addressesRowCount = (
+      await client.query("SELECT * FROM pgbulk.addresses")
+    ).rowCount;
 
     expect(usersRowCount).toBe(20_000);
     expect(addressesRowCount).toBe(20_000);
@@ -181,6 +186,7 @@ describe("Populate", () => {
               },
             ],
           },
+          schema: "pgbulk",
           allowDisableIndexes: true,
           allowDisableForeignKeys: true,
         });
@@ -207,9 +213,11 @@ describe("Populate", () => {
 
     await populate.start();
 
-    const usersRowCount = (await client.query("SELECT * FROM users")).rowCount;
-    const addressesRowCount = (await client.query("SELECT * FROM addresses"))
+    const usersRowCount = (await client.query("SELECT * FROM pgbulk.users"))
       .rowCount;
+    const addressesRowCount = (
+      await client.query("SELECT * FROM pgbulk.addresses")
+    ).rowCount;
 
     expect(usersRowCount).toBe(0);
     expect(addressesRowCount).toBe(2_000);
