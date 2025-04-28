@@ -1,10 +1,4 @@
-import {
-  ConnectionConfig,
-  Pool,
-  PoolClient,
-  PoolConfig,
-  QueryConfigValues,
-} from "pg";
+import { Pool, PoolClient, PoolConfig, QueryConfigValues } from "pg";
 import fs from "fs";
 import path from "path";
 import csv from "csv-parser";
@@ -15,7 +9,7 @@ import { pipeline } from "node:stream/promises";
 import internal, { Transform } from "stream";
 import { ColumnParserTransformer } from "./columnParserTransformer";
 import { globSync } from "glob";
-import { Logger } from "./logger";
+import ora, { Ora } from "ora";
 
 type Index = {
   name: string;
@@ -133,7 +127,7 @@ export class PGBulk {
   protected pool?: Pool;
   protected temporaryTableName;
 
-  private logger: Logger;
+  private log: Ora;
   private schema = "public";
 
   files: string[] = [];
@@ -144,7 +138,13 @@ export class PGBulk {
     this.usingTemporaryTableStrategy =
       config.useTemporaryTableStrategy || this.canUseTemporaryTableStrategy();
 
-    this.logger = new Logger(this.constructor.name, config.quiet || false);
+    this.log = ora({
+      text: "Initializing PGBulk",
+      color: "cyan",
+      spinner: "dots",
+      isSilent: config.quiet,
+      prefixText: this.constructor.name,
+    }).start();
 
     const pool = new Pool({
       ...this.config.connection,
@@ -207,7 +207,7 @@ export class PGBulk {
 
     for (const file of this.files) {
       const copyStream = client.query(copyFrom(this.buildCopyQuery()));
-      this.logger.info("Starting copying %s.", file);
+      this.log.text = format("Starting copying %s", file);
 
       await pipeline(
         this.streamFile(file)
@@ -227,7 +227,7 @@ export class PGBulk {
         copyStream
       );
 
-      this.logger.info("Done copying %s.", file);
+      this.log.text = format("Done copying %s", file);
     }
 
     if (this.usingTemporaryTableStrategy)
@@ -271,7 +271,7 @@ export class PGBulk {
 
     await client.query("COMMIT");
 
-    this.logger.info("All entries is now inserted to PostgreSQL.");
+    this.log.succeed("All entries is now inserted to PostgreSQL");
 
     client.release();
   }
@@ -329,7 +329,7 @@ export class PGBulk {
     });
 
     const indexesToCreateTasks = indexesToCreate.map(async (tempRow) => {
-      this.logger.info("Creating temporary index for %s.", tempRow);
+      this.log.text = format("Creating temporary index for %s.", tempRow);
       const query = `CREATE INDEX "idx_${this.temporaryTableName}_${tempRow}" ON "${this.temporaryTableName}" ("${tempRow}");`;
 
       await client.query(query);
@@ -357,7 +357,7 @@ export class PGBulk {
       })
       .join(" ");
 
-    this.logger.info("Pushing data to tables.");
+    this.log.text = format("Pushing data to tables");
 
     await client.query(query);
   }
@@ -365,7 +365,7 @@ export class PGBulk {
   private async fixForeignIssues(client: PoolClient) {
     const tables = this.getAllDefinedTables();
 
-    this.logger.info("Trying to fix foreign issues.");
+    this.log.text = format("Trying to fix foreign issues");
 
     for (const tableName of tables) {
       const columns = this.config.tables[tableName];
@@ -391,7 +391,7 @@ export class PGBulk {
 
         const { rowCount } = await client.query(query, values);
 
-        this.logger.info(
+        this.log.text = format(
           'Fixed %s rows with unknown foreign key in column "%s" on table "%s".',
           rowCount?.toString?.() || "0",
           databaseColumn,
@@ -491,7 +491,7 @@ export class PGBulk {
   private async removeAllIndexes(client: PoolClient, indexes: Index[]) {
     if (indexes.length === 0) return;
 
-    this.logger.info("Removing %s indexes.", indexes.length.toString());
+    this.log.text = format("Removing %s indexes", indexes.length.toString());
 
     const indexesName = indexes
       .map(({ name }) => `"${this.schema}"."${name}"`)
@@ -506,7 +506,7 @@ export class PGBulk {
   ) {
     if (constraints.length === 0) return;
 
-    this.logger.info(
+    this.log.text = format(
       "Removing %s foreign constraints.",
       constraints.length.toString()
     );
@@ -524,7 +524,7 @@ export class PGBulk {
   private async recreateAllIndexes(client: PoolClient, indexes: Index[]) {
     if (indexes.length === 0) return;
 
-    this.logger.info("Recreating %s indexes.", indexes.length.toString());
+    this.log.text = format("Recreating %s indexes.", indexes.length.toString());
 
     const query = indexes.map(({ definition }) => `${definition}`).join("; ");
 
@@ -537,7 +537,7 @@ export class PGBulk {
   ) {
     if (constraints.length === 0) return;
 
-    this.logger.info(
+    this.log.text = format(
       "Recreating %s foreign constraints",
       constraints.length.toString()
     );
@@ -638,5 +638,3 @@ export class PGBulk {
     return definedTables.length > 1 || hasCastingOrUnnest;
   }
 }
-
-export { ConnectionConfig };

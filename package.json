@@ -5,10 +5,10 @@
   "main": "./build/index.js",
   "scripts": {
     "build": "tsc --build",
-    "test": "docker compose up -d --wait && jest",
+    "test": "docker compose up -d --wait && bun test",
     "lint": "eslint --ignore-pattern build/**/*",
-    "test:faker": "ts-node ./tests/populate.faker.ts",
-    "prepare": "pnpm build"
+    "test:faker": "bun ./tests/populate.faker.ts",
+    "prepare": "bun run build"
   },
   "keywords": [
     "postgres",
@@ -30,6 +30,7 @@
     "csv-parser": "^3.2.0",
     "csv-stringify": "^6.5.2",
     "glob": "^11.0.1",
+    "ora": "^8.2.0",
     "pg": "^8.13.1",
     "pg-copy-streams": "^6.0.6"
   },
